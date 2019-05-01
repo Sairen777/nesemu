@@ -39,7 +39,6 @@ class Main {
     // Handle file drop.
     if (!(window.File && window.FileReader && window.FileList && window.Blob))
       return
-
     DomUtil.handleFileDrop(this.root, (files, x, y) => this.createAppFromFiles(files, x, y))
 
     const dropDesc = document.getElementById('drop-desc')

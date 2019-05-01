@@ -180,7 +180,7 @@ gulp.task('clean', del.bind(null, [
 ]))
 
 gulp.task('watch', gulp.parallel('watch-html', 'watch-ts', 'watch-sass',
-                                 'watch-lint', 'watch-test',
+                                 'watch-lint',
                                  'watch-reload'))
 
 gulp.task('build', gulp.parallel('html', 'ts', 'sass', 'copy-res', 'lint'))

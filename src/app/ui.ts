@@ -370,6 +370,42 @@ export class ScreenWnd extends Wnd {
               this.createFpsWnd()
             },
           },
+          {
+            label: 'LOG',
+            click: () => {
+              console.log(this.app)
+            },
+          },
+          {
+            label: 'run right',
+            click: () => {
+              console.log(this.app.nes.testRunRight())
+            },
+          },
+          {
+            label: 'set test bool true',
+            click: () => {
+              console.log(this.app.nes.setTestBool(true))
+            },
+          },
+          {
+            label: 'set test bool false',
+            click: () => {
+              console.log(this.app.nes.setTestBool(false))
+            },
+          },
+          {
+            label: 'set write test ram false',
+            click: () => {
+              console.log(this.app.nes.setTestWriteRam(false))
+            },
+          },
+          {
+            label: 'set write test ram true',
+            click: () => {
+              console.log(this.app.nes.setTestWriteRam(true))
+            },
+          },
         ],
       },
     ])

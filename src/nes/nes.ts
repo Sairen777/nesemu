@@ -58,6 +58,12 @@ export class Nes implements PrgBankController {
   protected apu: Apu
   protected cycleCount = 0
 
+  private isTestRunRight = false;
+  private testBool = false;
+  private writeTestRam = false;
+  private testRam = [];
+  private cyclesIter = 0;
+
   protected mapperNo = 0
   protected mapper: Mapper
   private prgRom = new Uint8Array(0)
@@ -152,14 +158,50 @@ export class Nes implements PrgBankController {
   }
 
   public setPadStatus(no: number, status: number): void {
+    // console.log(no, status);
     this.apu.setPadStatus(no, status)
   }
 
-  public runCycles(cycles: number): number {
+  public runCycles(cycles: number, shouldAutomate: boolean): number {
+    if (shouldAutomate) {
+      const ramStates = {initial: [...this.ram]};
+      const savedState = this.save();
+      // try different gamepad combos (press button -> step() -> save ram -> load from state)
+      // compare scores from ram
+      // choose best button press
+      // press button and go on
+      for (let i = 0; i < 8; i++) {
+        const padNumber = 2 ** i;
+        this.setPadStatus(0, padNumber);
+
+        try {
+          let leftCycles = cycles
+          let c = 0;
+          while (leftCycles > 0) {
+            c = this.step(leftCycles)
+            leftCycles -= c
+            if (this.cpu.isPaused()) {  // Hit break point.
+              this.breakPointCallback()
+              return 0
+            }
+          }
+        } catch (e) {
+          this.cpu.pause(true)
+          throw e
+        }
+
+        ramStates[padNumber] = [...this.ram];
+        this.load(savedState);
+      }
+      console.log(ramStates);
+      return -cycles
+    }
+
     try {
       let leftCycles = cycles
+      let c = 0;
       while (leftCycles > 0) {
-        const c = this.step(leftCycles)
+        c = this.step(leftCycles)
         leftCycles -= c
         if (this.cpu.isPaused()) {  // Hit break point.
           this.breakPointCallback()
@@ -174,8 +216,54 @@ export class Nes implements PrgBankController {
   }
 
   public step(leftCycles: number): number {
+    this.cyclesIter++;
+    /*
+    if (shouldAutomate) {
+      const ramStates = {initial: [...this.ram]};
+      const savedState = this.save();
+      // try different gamepad combos (press button -> step() -> save ram -> load from state)
+      // compare scores from ram
+      // choose best button press
+      // press button
+      for (let i = 0; i < 8; i++) {
+        const padNumber = 2 ** i;
+        for (let j = 0; j < 1000000; j++) {
+          this.setPadStatus(0, padNumber);
+          this.cpu.step();
+        }
+        ramStates[padNumber] = [...this.ram];
+        // this.load(savedState);
+      }
+      console.log(ramStates);
+      this.cyclesIter = 0;
+    }
+    */
     const cycle = this.cpu.step()
     this.cycleCount = this.tryHblankEvent(this.cycleCount, cycle, leftCycles)
+
+
+    // if (this.isTestRunRight) {
+    //   this.apu.setPadStatus(0, 128)
+    // }
+    // if (this.testBool) {
+    //   console.log('old ram');
+    //   console.log(this.testRam);
+    //   console.log('new ram');
+    //   console.log(this.ram);
+    //   this.setTestBool(false);
+    // }
+    // if (!this.testBool && this.writeTestRam) {
+    //   // @ts-ignore
+    //   this.testRam = [...this.ram]
+    //   console.log(this.testRam)
+    //   this.setTestWriteRam(false)
+    //   this.setTestBool(true)
+    // }
+    // if (this.cycleCount % 29780 === 0) {
+    //   console.log('frame')
+    // }
+
+
     return cycle
   }
 
@@ -271,7 +359,25 @@ export class Nes implements PrgBankController {
 
     // RAM
     bus.setReadMemory(0x0000, 0x1fff, (adr) => this.ram[adr & (RAM_SIZE - 1)])
-    bus.setWriteMemory(0x0000, 0x1fff, (adr, value) => { this.ram[adr & (RAM_SIZE - 1)] = value })
+    bus.setWriteMemory(0x0000, 0x1fff, (adr, value) => {
+      // RAM CHANGE
+      // if (this.isTestRunRight) {
+      //   this.apu.setPadStatus(0, 128)
+      // }
+      this.ram[adr & (RAM_SIZE - 1)] = value
+    })
+  }
+
+  public testRunRight(): void {
+    this.isTestRunRight = true
+  }
+
+  public setTestBool(value: boolean): void {
+    this.testBool = value
+  }
+
+  public setTestWriteRam(value: boolean): void {
+    this.writeTestRam = value
   }
 
   protected createMapper(mapperNo: number, romHash?: string): Mapper {
