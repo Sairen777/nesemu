@@ -1,6 +1,6 @@
 import {Nes} from '../nes/nes'
 import {MirrorMode} from '../nes/ppu'
-
+import {Autobot} from './autobot'
 import {AppEvent} from './app_event'
 import {AudioManager} from '../util/audio_manager'
 import {KeyCode} from '../util/key_code'
@@ -14,7 +14,6 @@ import * as Pubsub from '../util/pubsub'
 
 const CPU_HZ = 1789773
 const MAX_ELAPSED_TIME = 1000 / 15
-const FRAME_AUTOMATION_VALUE = 60 // automate every n-th frame; 12 frames ~= 0.2sec
 export const DEFAULT_MASTER_VOLUME = 0.125
 
 export class Option {
@@ -32,8 +31,6 @@ export class App {
   protected audioManager: AudioManager
   protected stream = new AppEvent.Stream()
   protected subscription: Pubsub.Subscription
-
-  private appTestBool = true;
 
   protected title: string
   protected screenWnd: ScreenWnd
@@ -316,19 +313,34 @@ export class App {
       return
     let lastTime = window.performance.now()
     let frameCounter = 0;
+    let automatedPadPressKey = -1;
 
     const loopFn = () => {
       if (this.destroying)
         return
-      if (frameCounter === FRAME_AUTOMATION_VALUE + 1) {
+      if (frameCounter === Autobot.FRAME_AUTOMATION_VALUE + 1) {
         frameCounter = 0;
       }
       this.stream.triggerStartCalc()
       const curTime = window.performance.now()
+      const shouldAutomate = Autobot.shouldAutomate(frameCounter);
       const elapsedTime = curTime - lastTime
       lastTime = curTime
 
-      this.update(elapsedTime, frameCounter === FRAME_AUTOMATION_VALUE)
+      if (shouldAutomate) {
+        const saveData = this.nes.save();
+        const ramData = {initial: [...this.nes.getRam()]};
+        for (let i = 0; i < 8; i++) {
+          const padNumber = 2 ** i;
+          this.update(elapsedTime, padNumber)
+          ramData[i] = [...this.nes.getRam()];
+          this.nes.load(saveData);
+        }
+        automatedPadPressKey = Autobot.selectBestControlFromRamStates(ramData);
+        this.update(elapsedTime)
+      } else {
+        this.update(elapsedTime, automatedPadPressKey !== -1 ? automatedPadPressKey : undefined)
+      }
       this.stream.triggerEndCalc()
       this.rafId = requestAnimationFrame(loopFn)
       frameCounter++;
@@ -345,13 +357,14 @@ export class App {
   }
 
   // cycles in frame
-  protected update(elapsedTime: number, shouldAutomate: boolean): void {
+  protected update(elapsedTime: number, keyPadPress?: number): void {
     if (this.nes.getCpu().isPaused())
       return
 
     for (let i = 0; i < 2; ++i) {
       const pad = this.wndMgr.getPadStatus(this.screenWnd, i)
-      this.nes.setPadStatus(i, pad)
+      const p = (i === 0 ? (keyPadPress || pad) : pad);
+      this.nes.setPadStatus(i, p)
       // if ((i !== 1 && pad !== 0) || (i !== 0 && pad !== 0))
       // console.log(i, pad);
     }
@@ -361,7 +374,7 @@ export class App {
           ? et * 4 : et)
 
     const cycles = (CPU_HZ * et / 1000) | 0
-    this.nes.runCycles(cycles, shouldAutomate)
+    this.nes.runCycles(cycles)
   }
 
   protected render(): void {
