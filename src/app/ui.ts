@@ -376,6 +376,30 @@ export class ScreenWnd extends Wnd {
               console.log(this.app)
             },
           },
+          {
+            label: 'Start recording RAM',
+            click: () => {
+              this.app.startRecordingRAM()
+            },
+          },
+          {
+            label: 'End recording RAM',
+            click: () => {
+              this.app.endRecordingRAM()
+            },
+          },
+          {
+            label: 'Start automation',
+            click: () => {
+              this.app.startAutomation()
+            },
+          },
+          {
+            label: 'End automation',
+            click: () => {
+              this.app.stopAutomation()
+            },
+          },
         ],
       },
     ])

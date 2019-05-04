@@ -32,6 +32,9 @@ export class App {
   protected stream = new AppEvent.Stream()
   protected subscription: Pubsub.Subscription
 
+  protected autobot = new Autobot()
+  protected isAutomating = false
+
   protected title: string
   protected screenWnd: ScreenWnd
   protected paletWnd: PaletWnd|null = null
@@ -41,6 +44,8 @@ export class App {
   protected hasRegisterWnd = false
   protected hasTraceWnd = false
   protected hasCtrlWnd = false
+
+  protected isRecordingRAM = false
 
   protected volume = 1
 
@@ -86,6 +91,7 @@ export class App {
     this.screenWnd = new ScreenWnd(this.wndMgr, this, this.nes, this.stream)
     this.wndMgr.add(this.screenWnd)
     this.title = (option.title as string) || 'NES'
+    this.autobot.setRamSnapshots(StorageUtil.getObject(`RAMDATA-${this.title}`, []))
     this.screenWnd.setTitle(this.title)
 
     const size = this.screenWnd.getWindowSize()
@@ -308,6 +314,23 @@ export class App {
     this.stream.triggerBreakPoint()
   }
 
+  public startRecordingRAM(): void {
+    this.isRecordingRAM = true;
+  }
+
+  public endRecordingRAM(): void {
+    this.isRecordingRAM = false;
+    StorageUtil.putObject(`RAMDATA-${this.title}`, this.autobot.getRamSnapshots())
+  }
+
+  public startAutomation(): void {
+    this.isAutomating = true
+  }
+
+  public stopAutomation(): void {
+    this.isAutomating = false
+  }
+
   protected startLoopAnimation(): void {
     if (this.rafId != null)
       return
@@ -318,14 +341,15 @@ export class App {
     const loopFn = () => {
       if (this.destroying)
         return
-      if (frameCounter === Autobot.FRAME_AUTOMATION_VALUE + 1) {
-        frameCounter = 0;
-      }
       this.stream.triggerStartCalc()
       const curTime = window.performance.now()
-      const shouldAutomate = Autobot.shouldAutomate(frameCounter);
       const elapsedTime = curTime - lastTime
       lastTime = curTime
+
+      if (this.isRecordingRAM && Autobot.shouldRecordRAM(frameCounter)) {
+        this.autobot.pushRAMSnapshot([...this.nes.getRam()])
+      }
+      const shouldAutomate = this.isAutomating && Autobot.shouldAutomate(frameCounter);
 
       if (shouldAutomate) {
         const saveData = this.nes.save();
@@ -336,11 +360,11 @@ export class App {
           ramData[i] = [...this.nes.getRam()];
           this.nes.load(saveData);
         }
-        automatedPadPressKey = Autobot.selectBestControlFromRamStates(ramData);
-        this.update(elapsedTime, automatedPadPressKey)
-      } else {
-        this.update(elapsedTime, automatedPadPressKey !== -1 ? automatedPadPressKey : undefined)
+        this.autobot.selectBestControlFromRamStates(ramData);
       }
+
+      this.update(elapsedTime, this.autobot.getPadKey())
+
       this.stream.triggerEndCalc()
       this.rafId = requestAnimationFrame(loopFn)
       frameCounter++;
