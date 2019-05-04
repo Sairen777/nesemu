@@ -337,7 +337,7 @@ export class App {
           this.nes.load(saveData);
         }
         automatedPadPressKey = Autobot.selectBestControlFromRamStates(ramData);
-        this.update(elapsedTime)
+        this.update(elapsedTime, automatedPadPressKey)
       } else {
         this.update(elapsedTime, automatedPadPressKey !== -1 ? automatedPadPressKey : undefined)
       }
