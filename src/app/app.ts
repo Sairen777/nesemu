@@ -91,7 +91,11 @@ export class App {
     this.screenWnd = new ScreenWnd(this.wndMgr, this, this.nes, this.stream)
     this.wndMgr.add(this.screenWnd)
     this.title = (option.title as string) || 'NES'
+
     this.autobot.setRamSnapshots(StorageUtil.getObject(`RAMDATA-${this.title}`, []))
+    // this.autobot.setRamSnapshots([[0,2,2,2], [0,2,4,2], [0,4,6,2], [0,2,8,6]])
+    this.autobot.setOrderings(StorageUtil.getObject(`ORDERINGS-${this.title}`, []))
+
     this.screenWnd.setTitle(this.title)
 
     const size = this.screenWnd.getWindowSize()
@@ -331,12 +335,19 @@ export class App {
     this.isAutomating = false
   }
 
+  public generateAndSaveOrderings(): void {
+    this.autobot.generateOrderings();
+    const generatedOrderings = this.autobot.getOrderings();
+    if (generatedOrderings.length !== 0) {
+      StorageUtil.putObject(`ORDERINGS-${this.title}`, this.autobot.getOrderings())
+    }
+  }
+
   protected startLoopAnimation(): void {
     if (this.rafId != null)
       return
     let lastTime = window.performance.now()
     let frameCounter = 0;
-    let automatedPadPressKey = -1;
 
     const loopFn = () => {
       if (this.destroying)

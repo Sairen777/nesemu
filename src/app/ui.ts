@@ -400,6 +400,12 @@ export class ScreenWnd extends Wnd {
               this.app.stopAutomation()
             },
           },
+          {
+            label: 'Create and log orderings',
+            click: () => {
+              this.app.generateAndSaveOrderings()
+            },
+          },
         ],
       },
     ])
