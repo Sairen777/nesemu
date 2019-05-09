@@ -1,3 +1,5 @@
+import {deprecate} from 'util'
+
 export class Autobot {
   static FRAME_AUTOMATION_VALUE = 60 // automate every n-th frame; 12 frames ~= 0.2sec
   static RAM_RECORDING_FRAME_FREQUENCY = 10 // record every n frames
@@ -5,9 +7,18 @@ export class Autobot {
   
   protected ramSnapshots: number[][] = []
   protected orderings: number[][] = []
+  protected orderingsWeight: number[] = []
   protected padKey: number
 
   constructor() {
+  }
+
+  public setOrderingsWeight(orderingsWeight: number[]): void {
+    this.orderingsWeight = orderingsWeight;
+  }
+
+  public getOrderingsWeight(): number[] {
+    return this.orderingsWeight;
   }
 
   public setOrderings(orderings: number[][]): void {
@@ -46,29 +57,62 @@ export class Autobot {
     return frameCounter % this.RAM_RECORDING_FRAME_FREQUENCY === 0;
   }
 
+  // public selectBestControlFromRamStates(ramStates: object): void {
+  //   let farestXPosition = -1;
+  //   let pad = 0;
+  //   if (ramStates['initial'][0x0770] === 0) { // if on title screen press start
+  //     this.setPadKey(8)
+  //   }
+  //   // @ts-ignore
+  //   for (const [padKey, ramState] of Object.entries(ramStates)) {
+  //     if (padKey === 'initial') {
+  //       continue;
+  //     }
+  //     if (ramState[0x0086] >= farestXPosition) {
+  //       farestXPosition = ramState[0x0086];
+  //       pad = padKey;
+  //     }
+  //   }
+  //   this.setPadKey(2 ** pad);
+  // }
+
   public selectBestControlFromRamStates(ramStates: object): void {
-    let farestXPosition = -1;
     let pad = 0;
-    if (ramStates['initial'][0x0770] === 0) { // if on title screen press start
-      this.setPadKey(8)
-    }
+    let initialStateOrdering = [];
+    let updatedStateOrdering = [];
+    let countedStateWeight = 0;
+    let biggestWeight = -1;
     // @ts-ignore
     for (const [padKey, ramState] of Object.entries(ramStates)) {
       if (padKey === 'initial') {
         continue;
       }
-      if (ramState[0x0086] >= farestXPosition) {
-        farestXPosition = ramState[0x0086];
+      for (let i = 0; i < this.orderings.length; i++) {
+        initialStateOrdering = [];
+        updatedStateOrdering = [];
+        this.orderings[i].forEach(index => {
+          initialStateOrdering.push(ramStates['initial'][index]);
+          updatedStateOrdering.push(ramState[index]);
+        });
+        if (initialStateOrdering < updatedStateOrdering) {
+          countedStateWeight += this.orderingsWeight[i];
+        }
+      }
+      if (countedStateWeight > biggestWeight) {
+        biggestWeight = countedStateWeight;
         pad = padKey;
       }
+      countedStateWeight = 0;
     }
     this.setPadKey(2 ** pad);
   }
 
+
   public generateOrderings(): void {
     if (this.ramSnapshots.length === 0) {
-      return console.log('No RAM snapshots to create orderings from!')
+      return console.error('No RAM snapshots to create orderings from!')
     }
+    this.setOrderings([]);
     let prefix = [];
     const remain: number[] = [];
     let localRemain: number[] = [];
@@ -81,7 +125,6 @@ export class Autobot {
       const ordering = this.makeOrdering(prefix, localRemain);
       this.orderings.push(ordering);
     }
-    console.log(this.orderings);
   }
 
   //  returns list of positions from remain that are tight extensions of the prefix
@@ -130,7 +173,6 @@ export class Autobot {
     return false;
   }
 
-
   private isRamsNotGreaterInPos(bitIndex: number, lequal: number[]): boolean {
     for (const ramNumber of lequal) {
       if (!this.ramSnapshots[ramNumber] || !this.ramSnapshots[ramNumber + 1] || this.ramSnapshots[ramNumber][bitIndex] > this.ramSnapshots[ramNumber + 1][bitIndex]) {
@@ -152,25 +194,48 @@ export class Autobot {
   }
 
   private weightOrdering(ordering: number[]): number {
-    let orderingValueFunction: number[][] = [];
+    let orderingV: number[][] = [];
     for (const ram of this.ramSnapshots) {
       let ramOrderedSelection: number[] = [];
-      // dont push duplicate values ?
-      ordering.forEach(index => ramOrderedSelection.push(ram[index]));
-      orderingValueFunction.push([...ramOrderedSelection]);
+      ordering.forEach(index => {
+        // dont push duplicate values
+        if (ramOrderedSelection.indexOf(ram[index]) === -1) {
+          ramOrderedSelection.push(ram[index])
+        }
+      });
+      orderingV.push([...ramOrderedSelection]);
       ramOrderedSelection = [];
     }
-    orderingValueFunction = orderingValueFunction.sort();
+    orderingV = orderingV.sort();
+
+    let orderingWeight = 0;
+    for (let i = 1; i < this.ramSnapshots.length - 2; i++) {
+      orderingWeight += this.computeOrderingVF(this.ramSnapshots[i + 1], ordering, orderingV) - this.computeOrderingVF(this.ramSnapshots[i], ordering, orderingV)
+    }
+    return orderingWeight >= 0 ? orderingWeight : 0;
   }
 
-  private computeValueFunction(ram: number[], ordering: number[], orderingValueFunction: number[][]) {
+  private computeOrderingVF(ram: number[], ordering: number[], orderingV: number[][]) {
     const ramOrdering: number[] = [];
-    // const orderingValueFunctionNorm = Math.sqrt()
+    // @ts-ignore
+    const orderingVNorma = Math.sqrt(orderingV.flat().reduce(
+      (acc, currentItem) => acc + currentItem**2
+    ));
     ordering.forEach(index => ramOrdering.push(ram[index]));
-    for (let i = 0; i < orderingValueFunction.length; i++) {
-      if (ramOrdering <= orderingValueFunction[i]) {
-
+    let targetIndex = -1;
+    for (let i = 0; i < orderingV.length; i++) {
+      if (ramOrdering <= orderingV[i]) {
+        targetIndex = i;
+        break;
       }
     }
+    const weight = (targetIndex === -1 ? orderingVNorma : targetIndex) / orderingVNorma;
+    return weight;
+  }
+
+  public computeOrderingsWeight(): void {
+    console.log('started computing orderings weigh');
+    this.orderings.forEach(ordering => this.orderingsWeight.push(this.weightOrdering(ordering)));
+    console.log('finished computing orderings weigh');
   }
 }

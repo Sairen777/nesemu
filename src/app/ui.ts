@@ -406,6 +406,12 @@ export class ScreenWnd extends Wnd {
               this.app.generateAndSaveOrderings()
             },
           },
+          {
+            label: 'Compute all orderings weigh',
+            click: () => {
+              this.app.computeOrderingsWeight()
+            },
+          },
         ],
       },
     ])

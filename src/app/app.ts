@@ -95,6 +95,7 @@ export class App {
     this.autobot.setRamSnapshots(StorageUtil.getObject(`RAMDATA-${this.title}`, []))
     // this.autobot.setRamSnapshots([[0,2,2,2], [0,2,4,2], [0,4,6,2], [0,2,8,6]])
     this.autobot.setOrderings(StorageUtil.getObject(`ORDERINGS-${this.title}`, []))
+    this.autobot.setOrderingsWeight(StorageUtil.getObject(`ORDERINGS-WEIGHT-${this.title}`, []))
 
     this.screenWnd.setTitle(this.title)
 
@@ -343,6 +344,13 @@ export class App {
     }
   }
 
+  public computeOrderingsWeight(): void {
+    this.autobot.computeOrderingsWeight();
+    if (this.autobot.getOrderingsWeight().length !== 0) {
+      StorageUtil.putObject(`ORDERINGS-WEIGHT-${this.title}`, this.autobot.getOrderingsWeight())
+    }
+  }
+
   protected startLoopAnimation(): void {
     if (this.rafId != null)
       return
@@ -367,7 +375,10 @@ export class App {
         const ramData = {initial: [...this.nes.getRam()]};
         for (let i = 0; i < 8; i++) {
           const padNumber = 2 ** i;
-          this.update(elapsedTime, padNumber)
+          // looking into the future
+          for (let j = 0; j < 50; j++) {
+            this.update(elapsedTime, padNumber)
+          }
           ramData[i] = [...this.nes.getRam()];
           this.nes.load(saveData);
         }
