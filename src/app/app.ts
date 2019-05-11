@@ -34,6 +34,7 @@ export class App {
 
   protected autobot = new Autobot()
   protected isAutomating = false
+  protected isLookingIntoFuture = false
 
   protected title: string
   protected screenWnd: ScreenWnd
@@ -96,6 +97,8 @@ export class App {
     // this.autobot.setRamSnapshots([[0,2,2,2], [0,2,4,2], [0,4,6,2], [0,2,8,6]])
     this.autobot.setOrderings(StorageUtil.getObject(`ORDERINGS-${this.title}`, []))
     this.autobot.setOrderingsWeight(StorageUtil.getObject(`ORDERINGS-WEIGHT-${this.title}`, []))
+    this.autobot.setMotifsWeight(StorageUtil.getObject(`MOTIFS-WEIGHT-${this.title}`, {}))
+    this.autobot.setSortedMotifs(StorageUtil.getObject(`MOTIFS-SORTED-${this.title}`, []))
 
     this.screenWnd.setTitle(this.title)
 
@@ -320,12 +323,18 @@ export class App {
   }
 
   public startRecordingRAM(): void {
+    console.log('started recording ram');
     this.isRecordingRAM = true;
   }
 
   public endRecordingRAM(): void {
     this.isRecordingRAM = false;
+    console.log('ended recording ram');
     StorageUtil.putObject(`RAMDATA-${this.title}`, this.autobot.getRamSnapshots())
+    this.autobot.weightMotifs();
+    StorageUtil.putObject(`MOTIFS-WEIGHT-${this.title}`, this.autobot.getMotifsWeight());
+    this.autobot.createOrderedMotifsFromWeights();
+    StorageUtil.putObject(`MOTIFS-SORTED-${this.title}`, this.autobot.getSortedMotifs());
   }
 
   public startAutomation(): void {
@@ -367,25 +376,36 @@ export class App {
 
       if (this.isRecordingRAM && Autobot.shouldRecordRAM(frameCounter)) {
         this.autobot.pushRAMSnapshot([...this.nes.getRam()])
+        console.log('saved snapshot')
       }
       const shouldAutomate = this.isAutomating && Autobot.shouldAutomate(frameCounter);
 
       if (shouldAutomate) {
         const saveData = this.nes.save();
         const ramData = {initial: [...this.nes.getRam()]};
-        for (let i = 0; i < 8; i++) {
-          const padNumber = 2 ** i;
-          // looking into the future
-          for (let j = 0; j < 50; j++) {
-            this.update(elapsedTime, padNumber)
+        this.isLookingIntoFuture = true;
+        let p = 0;
+        for (const [motifIndex, motif] of this.autobot.getSortedMotifs().entries()) {
+          for (const pad of motif) {
+            this.update(elapsedTime, pad)
+            p = pad;
           }
-          ramData[i] = [...this.nes.getRam()];
+          // random stuff probly not need
+          for (let j = 0; j < 10; j++) {
+            this.update(elapsedTime, p)
+          }
+
+          ramData[motifIndex] = [...this.nes.getRam()];
           this.nes.load(saveData);
         }
-        this.autobot.selectBestControlFromRamStates(ramData);
+        const bestMotif = this.autobot.selectBestControlFromRamStates(ramData);
+        this.isLookingIntoFuture = false;
+        for (const pad of bestMotif) {
+          this.update(elapsedTime, pad)
+        }
+      } else {
+        this.update(elapsedTime)
       }
-
-      this.update(elapsedTime, this.autobot.getPadKey())
 
       this.stream.triggerEndCalc()
       this.rafId = requestAnimationFrame(loopFn)
@@ -411,8 +431,11 @@ export class App {
       const pad = this.wndMgr.getPadStatus(this.screenWnd, i)
       const p = (i === 0 ? (keyPadPress || pad) : pad);
       this.nes.setPadStatus(i, p)
-      // if ((i !== 1 && pad !== 0) || (i !== 0 && pad !== 0))
-      // console.log(i, pad);
+      if (this.isRecordingRAM) {
+        if ((i !== 1 && pad !== 0) || (i !== 0 && pad !== 0)) {
+          this.autobot.addPressedInput(pad);
+        }
+      }
     }
 
     let et = Math.min(elapsedTime, MAX_ELAPSED_TIME)
@@ -424,6 +447,7 @@ export class App {
   }
 
   protected render(): void {
+    if (this.isLookingIntoFuture) return
     this.stream.triggerRender()
   }
 

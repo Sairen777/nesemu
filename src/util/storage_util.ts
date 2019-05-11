@@ -91,8 +91,12 @@ export default class StorageUtil {
 
   // Put object value.
   public static putObject(key: string, obj: object): boolean {
-    const k = getKey(key)
-    storage.setItem(k, JSON.stringify(obj))
-    return true
+    try {
+      const k = getKey(key)
+      storage.setItem(k, JSON.stringify(obj))
+      return true
+    } catch {
+      return false
+    }
   }
 }

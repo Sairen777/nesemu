@@ -1,16 +1,33 @@
-import {deprecate} from 'util'
-
 export class Autobot {
-  static FRAME_AUTOMATION_VALUE = 60 // automate every n-th frame; 12 frames ~= 0.2sec
-  static RAM_RECORDING_FRAME_FREQUENCY = 10 // record every n frames
+  static FRAME_AUTOMATION_VALUE = 1 // automate every n-th frame; 12 frames ~= 0.2sec
+  static RAM_RECORDING_FRAME_FREQUENCY = 1 // record every n frames
   static NUMBER_OF_GENERATED_ORDERINGS = 50
   
   protected ramSnapshots: number[][] = []
   protected orderings: number[][] = []
   protected orderingsWeight: number[] = []
-  protected padKey: number
+  protected pressedInputs: number[] = []
+  protected motifs: number[][] = []
+  protected motifsWeight: object = {}
+  protected sortedMotifs: number[][] = []
 
   constructor() {
+  }
+
+  public setSortedMotifs(sortedMotifs: number[][]): void {
+    this.sortedMotifs = sortedMotifs;
+  }
+
+  public getSortedMotifs(): number[][] {
+    return this.sortedMotifs;
+  }
+
+  public setMotifsWeight(motifsWeight: object): void {
+    this.motifsWeight = motifsWeight;
+  }
+
+  public getMotifsWeight(): object {
+    return this.motifsWeight;
   }
 
   public setOrderingsWeight(orderingsWeight: number[]): void {
@@ -27,14 +44,6 @@ export class Autobot {
 
   public getOrderings(): number[][] {
     return this.orderings;
-  }
-
-  public setPadKey(padKey: number): void {
-    this.padKey = padKey
-  }
-
-  public getPadKey(): number {
-    return this.padKey
   }
 
   public setRamSnapshots(ramSnapshots: number[][]): void {
@@ -57,34 +66,15 @@ export class Autobot {
     return frameCounter % this.RAM_RECORDING_FRAME_FREQUENCY === 0;
   }
 
-  // public selectBestControlFromRamStates(ramStates: object): void {
-  //   let farestXPosition = -1;
-  //   let pad = 0;
-  //   if (ramStates['initial'][0x0770] === 0) { // if on title screen press start
-  //     this.setPadKey(8)
-  //   }
-  //   // @ts-ignore
-  //   for (const [padKey, ramState] of Object.entries(ramStates)) {
-  //     if (padKey === 'initial') {
-  //       continue;
-  //     }
-  //     if (ramState[0x0086] >= farestXPosition) {
-  //       farestXPosition = ramState[0x0086];
-  //       pad = padKey;
-  //     }
-  //   }
-  //   this.setPadKey(2 ** pad);
-  // }
-
-  public selectBestControlFromRamStates(ramStates: object): void {
-    let pad = 0;
+  public selectBestControlFromRamStates(ramStates: object): number[] {
+    let motif: number[] = [];
     let initialStateOrdering = [];
     let updatedStateOrdering = [];
     let countedStateWeight = 0;
     let biggestWeight = -1;
     // @ts-ignore
-    for (const [padKey, ramState] of Object.entries(ramStates)) {
-      if (padKey === 'initial') {
+    for (const [motifIndex, ramState] of Object.entries(ramStates)) {
+      if (motifIndex === 'initial') {
         continue;
       }
       for (let i = 0; i < this.orderings.length; i++) {
@@ -100,13 +90,12 @@ export class Autobot {
       }
       if (countedStateWeight > biggestWeight) {
         biggestWeight = countedStateWeight;
-        pad = padKey;
+        motif = this.sortedMotifs[motifIndex];
       }
       countedStateWeight = 0;
     }
-    this.setPadKey(2 ** pad);
+    return motif;
   }
-
 
   public generateOrderings(): void {
     if (this.ramSnapshots.length === 0) {
@@ -119,31 +108,63 @@ export class Autobot {
     for (let i = 0; i < this.ramSnapshots[0].length; i++) {
       remain.push(i);
     }
+    // orderings on whole ram recording
     for (let i = 0; i < Autobot.NUMBER_OF_GENERATED_ORDERINGS; i++) {
       localRemain = [...remain];
       prefix = [];
-      const ordering = this.makeOrdering(prefix, localRemain);
+      const ordering = this.makeOrdering(prefix, localRemain, this.ramSnapshots);
       this.orderings.push(ordering);
+    }
+    // ordering on each 10's memory
+    const every10RamSnapshot = this.ramSnapshots.filter((_, index) => index % 10 === 0);
+    for (let i = 0; i < 3; i++) {
+      localRemain = [...remain];
+      prefix = [];
+      const tenthOrdering = this.makeOrdering(prefix, localRemain, every10RamSnapshot);
+      this.orderings.push(tenthOrdering);
+    }
+    // starting from i
+    for (let i = 0; i < 10; i++) {
+      // every 100th
+      const every100RamSnapshot = this.ramSnapshots.filter((_, index) => ((index + i) % 100) === 0);
+      localRemain = [...remain];
+      prefix = [];
+      let ord = this.makeOrdering(prefix, localRemain, every100RamSnapshot);
+      this.orderings.push(ord);
+
+      // every 250th
+      const every250RamSnapshot = this.ramSnapshots.filter((_, index) => ((index + i) % 250) === 0);
+      localRemain = [...remain];
+      prefix = [];
+      ord = this.makeOrdering(prefix, localRemain, every250RamSnapshot);
+      this.orderings.push(ord);
+
+      // every 1000th
+      const every1000RamSnapshot = this.ramSnapshots.filter((_, index) => ((index + i) % 1000) === 0);
+      localRemain = [...remain];
+      prefix = [];
+      ord = this.makeOrdering(prefix, localRemain, every1000RamSnapshot);
+      this.orderings.push(ord);
     }
   }
 
   //  returns list of positions from remain that are tight extensions of the prefix
-  private pickCandidates(prefix: number[], remain: number[]): number[] {
+  private pickCandidates(prefix: number[], remain: number[], targetArr: number[][]): number[] {
     const lequal: number[] = [];
     const notgreater: number[] = [];
     const tight: number[] = [];
-    for (let i = 0; i < this.ramSnapshots.length - 1; i++) {
-      if (this.isRamsEqualByPrefix(prefix, this.ramSnapshots[i] || [], this.ramSnapshots[i+1] || [])) {
+    for (let i = 0; i < targetArr.length - 1; i++) {
+      if (this.isRamsEqualByPrefix(prefix, targetArr[i] || [], targetArr[i+1] || [])) {
         lequal.push(i);
       }
     }
     for (const i of remain) {
-      if (this.isRamsNotGreaterInPos(i, lequal)) {
+      if (this.isRamsNotGreaterInPos(i, lequal, targetArr)) {
         notgreater.push(i);
       }
     }
     for (const i of notgreater) {
-      if (this.isRamsGreaterInPos(i, lequal)) {
+      if (this.isRamsGreaterInPos(i, lequal, targetArr)) {
         tight.push(i);
       }
     }
@@ -152,30 +173,30 @@ export class Autobot {
 
   // returns maximal tight valid ordering
   // prefix is tight and valid
-  private makeOrdering(prefix: number[], remain: number[]): number[] {
-    const candidates = this.pickCandidates(prefix, remain);
+  private makeOrdering(prefix: number[], remain: number[], targetArr: number[][]): number[] {
+    const candidates = this.pickCandidates(prefix, remain, targetArr);
     if (candidates.length === 0) {
       return prefix;
     } else {
       const c = candidates[Math.floor(Math.random() * candidates.length)];
       remain = remain.filter(item => item !== c);
       prefix.push(c);
-      return this.makeOrdering(prefix, remain);
+      return this.makeOrdering(prefix, remain, targetArr)
     }
   }
 
-  private isRamsGreaterInPos(bitIndex: number, lequal: number[]): boolean {
+  private isRamsGreaterInPos(bitIndex: number, lequal: number[], targetArr: number[][]): boolean {
     for (const ramNumber of lequal) {
-      if (this.ramSnapshots[ramNumber] && this.ramSnapshots[ramNumber + 1] && this.ramSnapshots[ramNumber][bitIndex] < this.ramSnapshots[ramNumber + 1][bitIndex]) {
+      if (targetArr[ramNumber] && targetArr[ramNumber + 1] && targetArr[ramNumber][bitIndex] < targetArr[ramNumber + 1][bitIndex]) {
         return true;
       }
     }
     return false;
   }
 
-  private isRamsNotGreaterInPos(bitIndex: number, lequal: number[]): boolean {
+  private isRamsNotGreaterInPos(bitIndex: number, lequal: number[], targetArr: number[][]): boolean {
     for (const ramNumber of lequal) {
-      if (!this.ramSnapshots[ramNumber] || !this.ramSnapshots[ramNumber + 1] || this.ramSnapshots[ramNumber][bitIndex] > this.ramSnapshots[ramNumber + 1][bitIndex]) {
+      if (!targetArr[ramNumber] || !targetArr[ramNumber + 1] || targetArr[ramNumber][bitIndex] > targetArr[ramNumber + 1][bitIndex]) {
         return false;
       }
     }
@@ -207,10 +228,24 @@ export class Autobot {
       ramOrderedSelection = [];
     }
     orderingV = orderingV.sort();
-
+    const orderingsCache = {};
     let orderingWeight = 0;
+    let left: number;
+    let right: number;
     for (let i = 1; i < this.ramSnapshots.length - 2; i++) {
-      orderingWeight += this.computeOrderingVF(this.ramSnapshots[i + 1], ordering, orderingV) - this.computeOrderingVF(this.ramSnapshots[i], ordering, orderingV)
+      if (orderingsCache[i+1]) {
+        left = orderingsCache[i+1];
+      } else {
+        left = this.computeOrderingVF(this.ramSnapshots[i + 1], ordering, orderingV);
+        orderingsCache[i+1] = left;
+      }
+      if (orderingsCache[i]) {
+        right = orderingsCache[i];
+      } else {
+        right = this.computeOrderingVF(this.ramSnapshots[i], ordering, orderingV);
+        orderingsCache[i+1] = left;
+      }
+      orderingWeight += (left - right);
     }
     return orderingWeight >= 0 ? orderingWeight : 0;
   }
@@ -235,7 +270,41 @@ export class Autobot {
 
   public computeOrderingsWeight(): void {
     console.log('started computing orderings weigh');
-    this.orderings.forEach(ordering => this.orderingsWeight.push(this.weightOrdering(ordering)));
+    this.orderings.forEach(ordering => {
+      this.orderingsWeight.push(this.weightOrdering(ordering));
+      console.log('weight computed');
+    });
     console.log('finished computing orderings weigh');
+  }
+
+  public addPressedInput(pad: number): void {
+    if (this.motifs.length === 0 || this.motifs[this.motifs.length - 1].length === 10) {
+      this.motifs.push([pad]);
+    } else {
+      this.motifs[this.motifs.length - 1].push(pad);
+    }
+  }
+
+  public weightMotifs(): void {
+    this.motifsWeight = {};
+    for (const motif of this.motifs) {
+      if (!this.motifsWeight[JSON.stringify(motif)]) {
+        this.motifsWeight[JSON.stringify(motif)] = 1;
+      } else {
+        this.motifsWeight[JSON.stringify(motif)] += 1;
+      }
+    }
+  }
+
+  // transform {motif: weight} into [motif] sorted by weight
+  // TODO: actually order them
+  public createOrderedMotifsFromWeights(): void {
+    this.sortedMotifs = [];
+    if (!Object.keys(this.getMotifsWeight()).length) {
+      return console.log('cant create ordered motifs: no motifs weights')
+    }
+    for (const [strMotif, weight] of Object.entries(this.motifsWeight)) {
+      this.sortedMotifs.push(JSON.parse(strMotif));
+    }
   }
 }
