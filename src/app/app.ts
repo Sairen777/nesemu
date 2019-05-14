@@ -101,7 +101,6 @@ export class App {
     this.autobot.setOrderings(StorageUtil.getObject(`ORDERINGS-${this.title}`, []))
     this.autobot.setOrderingsWeight(StorageUtil.getObject(`ORDERINGS-WEIGHT-${this.title}`, []))
     this.autobot.setMotifsWeight(StorageUtil.getObject(`MOTIFS-WEIGHT-${this.title}`, {}))
-    this.autobot.setSortedMotifs(StorageUtil.getObject(`MOTIFS-SORTED-${this.title}`, []))
 
     this.screenWnd.setTitle(this.title)
 
@@ -336,8 +335,6 @@ export class App {
     StorageUtil.putObject(`RAMDATA-${this.title}`, this.autobot.getRamSnapshots())
     this.autobot.weightMotifs();
     StorageUtil.putObject(`MOTIFS-WEIGHT-${this.title}`, this.autobot.getMotifsWeight());
-    this.autobot.createOrderedMotifsFromWeights();
-    StorageUtil.putObject(`MOTIFS-SORTED-${this.title}`, this.autobot.getSortedMotifs());
   }
 
   public startComputingControls(): void {
@@ -404,8 +401,8 @@ export class App {
         const ramData = {initial: [...this.nes.getRam()]};
         this.isLookingIntoFuture = true;
         // let p = 0;
-        for (const [motifIndex, motif] of this.autobot.getSortedMotifs().entries()) {
-          for (const pad of motif) {
+        for (const [index, motifObj] of this.autobot.getMotifsWeight().entries()) {
+          for (const pad of motifObj.motif) {
             this.update(elapsedTime, pad)
             // p = pad;
           }
@@ -413,7 +410,7 @@ export class App {
           // for (let j = 0; j < 10; j++) {
           //   this.update(elapsedTime, p)
           // }
-          ramData[motifIndex] = [...this.nes.getRam()];
+          ramData[index] = [...this.nes.getRam()];
           this.nes.load(saveData);
         }
         this.nes.load(saveData);

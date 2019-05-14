@@ -9,7 +9,7 @@ export class Autobot {
   protected orderingsWeight: number[] = []
   protected pressedInputs: number[] = []
   protected motifs: number[][] = []
-  protected motifsWeight: object = {}
+  protected motifsWeight: object[] = []
   protected sortedMotifs: number[][] = []
   protected buttonsToPress: number[] = []
   protected motifsPlayHistory: number[][] = []
@@ -51,11 +51,11 @@ export class Autobot {
     return this.sortedMotifs;
   }
 
-  public setMotifsWeight(motifsWeight: object): void {
+  public setMotifsWeight(motifsWeight: object[]): void {
     this.motifsWeight = motifsWeight;
   }
 
-  public getMotifsWeight(): object {
+  public getMotifsWeight(): object[] {
     return this.motifsWeight;
   }
 
@@ -119,7 +119,7 @@ export class Autobot {
       }
       if (countedStateWeight > biggestWeight) {
         biggestWeight = countedStateWeight;
-        motif = this.sortedMotifs[motifIndex];
+        motif = this.motifsWeight[motifIndex].motif;
       }
       countedStateWeight = 0;
     }
@@ -319,25 +319,16 @@ export class Autobot {
   }
 
   public weightMotifs(): void {
-    this.motifsWeight = {};
+    this.motifsWeight = [];
     for (const motif of this.motifs) {
-      if (!this.motifsWeight[JSON.stringify(motif)]) {
-        this.motifsWeight[JSON.stringify(motif)] = 1;
+      const existedEntry = this.motifsWeight.find(e => JSON.stringify(e.motif) === JSON.stringify(motif));
+      if (!existedEntry) {
+        this.motifsWeight.push({motif: motif, weight: 1});
       } else {
-        this.motifsWeight[JSON.stringify(motif)] += 1;
+        const index = this.motifsWeight.indexOf(existedEntry);
+        this.motifsWeight[index].weight += 1;
       }
     }
-  }
-
-  // transform {motif: weight} into [motif] sorted by weight
-  // TODO: actually order them
-  public createOrderedMotifsFromWeights(): void {
-    this.sortedMotifs = [];
-    if (!Object.keys(this.getMotifsWeight()).length) {
-      return console.log('cant create ordered motifs: no motifs weights')
-    }
-    for (const [strMotif, weight] of Object.entries(this.motifsWeight)) {
-      this.sortedMotifs.push(JSON.parse(strMotif));
-    }
+    this.motifsWeight.sort((a, b) => (a.weight < b.weight) ? 1 : -1);
   }
 }
