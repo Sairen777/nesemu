@@ -35,6 +35,9 @@ export class App {
   protected autobot = new Autobot()
   protected isAutomating = false
   protected isLookingIntoFuture = false
+  protected isComputingControls = false
+  protected initialSave = {}
+  protected isPlayingSavedControls = false
 
   protected title: string
   protected screenWnd: ScreenWnd
@@ -337,6 +340,18 @@ export class App {
     StorageUtil.putObject(`MOTIFS-SORTED-${this.title}`, this.autobot.getSortedMotifs());
   }
 
+  public startComputingControls(): void {
+    this.initialSave = this.nes.save();
+    this.isComputingControls = true;
+  }
+
+  public stopComputingControls(): void {
+    this.isComputingControls = false;
+    this.nes.load(this.initialSave);
+    this.autobot.reverseControlsArray();
+    this.isPlayingSavedControls = true;
+  }
+
   public startAutomation(): void {
     this.isAutomating = true
   }
@@ -370,46 +385,65 @@ export class App {
       if (this.destroying)
         return
       this.stream.triggerStartCalc()
-      const curTime = window.performance.now()
-      const elapsedTime = curTime - lastTime
+      let curTime = window.performance.now()
+      let elapsedTime = curTime - lastTime
       lastTime = curTime
+      frameCounter++;
+      // console.log(frameCounter);
 
       if (this.isRecordingRAM && Autobot.shouldRecordRAM(frameCounter)) {
         this.autobot.pushRAMSnapshot([...this.nes.getRam()])
         console.log('saved snapshot')
       }
-      const shouldAutomate = this.isAutomating && Autobot.shouldAutomate(frameCounter);
+
+      const shouldAutomate = (this.isAutomating || this.isComputingControls) && Autobot.shouldAutomate(frameCounter);
 
       if (shouldAutomate) {
+        console.log('automating');
         const saveData = this.nes.save();
         const ramData = {initial: [...this.nes.getRam()]};
         this.isLookingIntoFuture = true;
-        let p = 0;
+        // let p = 0;
         for (const [motifIndex, motif] of this.autobot.getSortedMotifs().entries()) {
           for (const pad of motif) {
             this.update(elapsedTime, pad)
-            p = pad;
+            // p = pad;
           }
           // random stuff probly not need
-          for (let j = 0; j < 10; j++) {
-            this.update(elapsedTime, p)
-          }
-
+          // for (let j = 0; j < 10; j++) {
+          //   this.update(elapsedTime, p)
+          // }
           ramData[motifIndex] = [...this.nes.getRam()];
           this.nes.load(saveData);
         }
+        this.nes.load(saveData);
         const bestMotif = this.autobot.selectBestControlFromRamStates(ramData);
+        this.autobot.pushMotifsPlayHistory(bestMotif);
+        console.log(bestMotif);
+        if (this.isComputingControls) {
+          this.autobot.addMotifToButtonPress(bestMotif)
+        }
         this.isLookingIntoFuture = false;
         for (const pad of bestMotif) {
           this.update(elapsedTime, pad)
+          frameCounter++;
+        }
+      } else if (this.isPlayingSavedControls) {
+        if (this.autobot.hasButtonPresses()) {
+          this.update(elapsedTime, this.autobot.getNextButtonPress());
+        } else {
+          console.log('stopped playing controls')
+          this.isPlayingSavedControls = false;
         }
       } else {
-        this.update(elapsedTime)
+        this.update(elapsedTime);
       }
 
       this.stream.triggerEndCalc()
       this.rafId = requestAnimationFrame(loopFn)
-      frameCounter++;
+      if (this.isComputingControls && frameCounter >= Autobot.NUMBER_OF_FRAMES_TO_AUTOMATE_FOR) {
+        this.stopComputingControls();
+      }
     }
 
     this.rafId = requestAnimationFrame(loopFn)
@@ -431,6 +465,7 @@ export class App {
       const pad = this.wndMgr.getPadStatus(this.screenWnd, i)
       const p = (i === 0 ? (keyPadPress || pad) : pad);
       this.nes.setPadStatus(i, p)
+      // record motifs
       if (this.isRecordingRAM) {
         if ((i !== 1 && pad !== 0) || (i !== 0 && pad !== 0)) {
           this.autobot.addPressedInput(pad);
@@ -443,11 +478,14 @@ export class App {
           ? et * 4 : et)
 
     const cycles = (CPU_HZ * et / 1000) | 0
+    // 29780
     this.nes.runCycles(cycles)
   }
 
   protected render(): void {
-    if (this.isLookingIntoFuture) return
+    if (this.isLookingIntoFuture) {
+      return
+    }
     this.stream.triggerRender()
   }
 

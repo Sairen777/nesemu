@@ -1,7 +1,8 @@
 export class Autobot {
-  static FRAME_AUTOMATION_VALUE = 1 // automate every n-th frame; 12 frames ~= 0.2sec
+  static FRAME_AUTOMATION_VALUE = 1  // automate every n-th frame; 12 frames ~= 0.2sec
   static RAM_RECORDING_FRAME_FREQUENCY = 1 // record every n frames
   static NUMBER_OF_GENERATED_ORDERINGS = 50
+  static NUMBER_OF_FRAMES_TO_AUTOMATE_FOR = 10*60 // frames * sec
   
   protected ramSnapshots: number[][] = []
   protected orderings: number[][] = []
@@ -10,8 +11,36 @@ export class Autobot {
   protected motifs: number[][] = []
   protected motifsWeight: object = {}
   protected sortedMotifs: number[][] = []
+  protected buttonsToPress: number[] = []
+  protected motifsPlayHistory: number[][] = []
+  public testInputs: number[] = Array(120).fill(128)
 
   constructor() {
+  }
+
+  public pushMotifsPlayHistory(motif: number[]): void {
+    this.motifsPlayHistory.push(motif);
+  }
+
+  public reverseControlsArray(): void {
+    this.buttonsToPress = this.buttonsToPress.reverse();
+  }
+
+  public hasButtonPresses(): boolean {
+    return this.buttonsToPress.length !== 0;
+  }
+
+  public getNextButtonPress(): number {
+    // @ts-ignore
+    return this.buttonsToPress.pop();
+  }
+
+  public addMotifToButtonPress(motif: number[]): void {
+    this.buttonsToPress.push(...motif);
+  }
+
+  public addButtonToPress(pad: number): void {
+    this.buttonsToPress.push(pad);
   }
 
   public setSortedMotifs(sortedMotifs: number[][]): void {
@@ -130,21 +159,25 @@ export class Autobot {
       localRemain = [...remain];
       prefix = [];
       let ord = this.makeOrdering(prefix, localRemain, every100RamSnapshot);
-      this.orderings.push(ord);
-
+      if (ord.length !== 0) {
+        this.orderings.push(ord);
+      }
       // every 250th
       const every250RamSnapshot = this.ramSnapshots.filter((_, index) => ((index + i) % 250) === 0);
       localRemain = [...remain];
       prefix = [];
       ord = this.makeOrdering(prefix, localRemain, every250RamSnapshot);
-      this.orderings.push(ord);
-
+      if (ord.length !== 0) {
+        this.orderings.push(ord);
+      }
       // every 1000th
       const every1000RamSnapshot = this.ramSnapshots.filter((_, index) => ((index + i) % 1000) === 0);
       localRemain = [...remain];
       prefix = [];
       ord = this.makeOrdering(prefix, localRemain, every1000RamSnapshot);
-      this.orderings.push(ord);
+      if (ord.length !== 0) {
+        this.orderings.push(ord);
+      }
     }
   }
 
@@ -232,7 +265,7 @@ export class Autobot {
     let orderingWeight = 0;
     let left: number;
     let right: number;
-    for (let i = 1; i < this.ramSnapshots.length - 2; i++) {
+    for (let i = 1; i < this.ramSnapshots.length - 1; i++) {
       if (orderingsCache[i+1]) {
         left = orderingsCache[i+1];
       } else {
@@ -243,7 +276,7 @@ export class Autobot {
         right = orderingsCache[i];
       } else {
         right = this.computeOrderingVF(this.ramSnapshots[i], ordering, orderingV);
-        orderingsCache[i+1] = left;
+        orderingsCache[i] = right;
       }
       orderingWeight += (left - right);
     }

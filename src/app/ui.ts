@@ -322,54 +322,54 @@ export class ScreenWnd extends Wnd {
       {
         label: 'Debug',
         submenu: [
-          {
-            label: 'Edge',
-            click: () => {
-              this.toggleEdge()
-            },
-          },
-          {
-            label: 'Palette',
-            click: () => {
-              this.app.createPaletWnd()
-            },
-          },
-          {
-            label: 'NameTable',
-            click: () => {
-              this.app.createNameTableWnd()
-            },
-          },
-          {
-            label: 'PatternTable',
-            click: () => {
-              this.app.createPatternTableWnd()
-            },
-          },
-          {
-            label: 'Trace',
-            click: () => {
-              this.app.createTraceWnd()
-            },
-          },
-          {
-            label: 'Registers',
-            click: () => {
-              this.app.createRegisterWnd()
-            },
-          },
-          {
-            label: 'Control',
-            click: () => {
-              this.app.createControlWnd()
-            },
-          },
-          {
-            label: 'FPS',
-            click: () => {
-              this.createFpsWnd()
-            },
-          },
+          // {
+          //   label: 'Edge',
+          //   click: () => {
+          //     this.toggleEdge()
+          //   },
+          // },
+          // {
+          //   label: 'Palette',
+          //   click: () => {
+          //     this.app.createPaletWnd()
+          //   },
+          // },
+          // {
+          //   label: 'NameTable',
+          //   click: () => {
+          //     this.app.createNameTableWnd()
+          //   },
+          // },
+          // {
+          //   label: 'PatternTable',
+          //   click: () => {
+          //     this.app.createPatternTableWnd()
+          //   },
+          // },
+          // {
+          //   label: 'Trace',
+          //   click: () => {
+          //     this.app.createTraceWnd()
+          //   },
+          // },
+          // {
+          //   label: 'Registers',
+          //   click: () => {
+          //     this.app.createRegisterWnd()
+          //   },
+          // },
+          // {
+          //   label: 'Control',
+          //   click: () => {
+          //     this.app.createControlWnd()
+          //   },
+          // },
+          // {
+          //   label: 'FPS',
+          //   click: () => {
+          //     this.createFpsWnd()
+          //   },
+          // },
           {
             label: 'Log app',
             click: () => {
@@ -412,6 +412,13 @@ export class ScreenWnd extends Wnd {
               this.app.computeOrderingsWeight()
             },
           },
+          {
+            label: 'compute and play automated controls',
+            click: () => {
+              this.app.startComputingControls()
+            },
+          },
+
         ],
       },
     ])
