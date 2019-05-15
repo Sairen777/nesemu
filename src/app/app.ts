@@ -399,24 +399,43 @@ export class App {
         console.log('automating');
         const saveData = this.nes.save();
         const ramData = {initial: [...this.nes.getRam()]};
+
+        let bestMotif: number[] = [];
+        let bestMotifScore = -1;
+
         this.isLookingIntoFuture = true;
-        // let p = 0;
-        for (const [index, motifObj] of this.autobot.getMotifsWeight().entries()) {
+        for (const motifObj of this.autobot.getMotifsWeight()) {
           for (const pad of motifObj.motif) {
             this.update(elapsedTime, pad)
-            // p = pad;
           }
-          // random stuff probly not need
-          // for (let j = 0; j < 10; j++) {
-          //   this.update(elapsedTime, p)
-          // }
-          ramData[index] = [...this.nes.getRam()];
+
+          // play 10 most common motifs and pick one with lowest score
+          const afterInitialMotifSave = this.nes.save();
+          let lowestWeight = 100000;
+
+          for (let i = 0; i < 10; i++) {
+            for (const pad of this.autobot.getMotifsWeight()[i].motif) {
+              this.update(elapsedTime, pad)
+            }
+            const weight = this.autobot.computeNewRamStateWeight(ramData['initial'], [...this.nes.getRam()]);
+            if (weight < lowestWeight) {
+              // lowestWeight = weight;
+              lowestWeight = weight
+            }
+
+            this.nes.load(afterInitialMotifSave);
+          }
+
+          if (lowestWeight > bestMotifScore) {
+            bestMotifScore = lowestWeight;
+            bestMotif = [...motifObj.motif];
+          }
+
           this.nes.load(saveData);
         }
-        this.nes.load(saveData);
-        const bestMotif = this.autobot.selectBestControlFromRamStates(ramData);
-        this.autobot.pushMotifsPlayHistory(bestMotif);
-        console.log(bestMotif);
+
+        this.autobot.pushMotifsPlayHistory({motif: bestMotif, elapsedTime: elapsedTime});
+        console.log('best motif', bestMotif);
         if (this.isComputingControls) {
           this.autobot.addMotifToButtonPress(bestMotif)
         }
@@ -476,7 +495,7 @@ export class App {
 
     const cycles = (CPU_HZ * et / 1000) | 0
     // 29780
-    this.nes.runCycles(cycles)
+    this.nes.runCycles(29780)
   }
 
   protected render(): void {

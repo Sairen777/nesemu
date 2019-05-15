@@ -12,14 +12,14 @@ export class Autobot {
   protected motifsWeight: object[] = []
   protected sortedMotifs: number[][] = []
   protected buttonsToPress: number[] = []
-  protected motifsPlayHistory: number[][] = []
+  protected motifsPlayHistory: object[] = []
   public testInputs: number[] = Array(120).fill(128)
 
   constructor() {
   }
 
-  public pushMotifsPlayHistory(motif: number[]): void {
-    this.motifsPlayHistory.push(motif);
+  public pushMotifsPlayHistory(motifAndElapsedTime: object): void {
+    this.motifsPlayHistory.push(motifAndElapsedTime);
   }
 
   public reverseControlsArray(): void {
@@ -97,33 +97,38 @@ export class Autobot {
 
   public selectBestControlFromRamStates(ramStates: object): number[] {
     let motif: number[] = [];
-    let initialStateOrdering = [];
-    let updatedStateOrdering = [];
-    let countedStateWeight = 0;
     let biggestWeight = -1;
     // @ts-ignore
     for (const [motifIndex, ramState] of Object.entries(ramStates)) {
       if (motifIndex === 'initial') {
         continue;
       }
-      for (let i = 0; i < this.orderings.length; i++) {
-        initialStateOrdering = [];
-        updatedStateOrdering = [];
-        this.orderings[i].forEach(index => {
-          initialStateOrdering.push(ramStates['initial'][index]);
-          updatedStateOrdering.push(ramState[index]);
-        });
-        if (initialStateOrdering < updatedStateOrdering) {
-          countedStateWeight += this.orderingsWeight[i];
-        }
-      }
+      const countedStateWeight = this.computeNewRamStateWeight(ramStates['initial'], ramState);
+      // console.log(countedStateWeight, this.motifsWeight[motifIndex].motif);
       if (countedStateWeight > biggestWeight) {
         biggestWeight = countedStateWeight;
         motif = this.motifsWeight[motifIndex].motif;
       }
-      countedStateWeight = 0;
     }
     return motif;
+  }
+
+  public computeNewRamStateWeight(initialRamState: number[], updatedRamState: number[]): number {
+    let initialStateOrdering: number[] = [];
+    let updatedStateOrdering: number[] = [];
+    let weight = 0;
+    for (let i = 0; i < this.orderings.length; i++) {
+      this.orderings[i].forEach(index => {
+        initialStateOrdering.push(initialRamState[index]);
+        updatedStateOrdering.push(updatedRamState[index]);
+      });
+      if (initialStateOrdering < updatedStateOrdering) {
+        weight += this.orderingsWeight[i];
+      }
+      initialStateOrdering = [];
+      updatedStateOrdering = [];
+    }
+    return weight;
   }
 
   public generateOrderings(): void {
