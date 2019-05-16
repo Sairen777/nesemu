@@ -401,7 +401,7 @@ export class ScreenWnd extends Wnd {
             },
           },
           {
-            label: 'Create and log orderings',
+            label: 'Create orderings',
             click: () => {
               this.app.generateAndSaveOrderings()
             },
@@ -413,12 +413,23 @@ export class ScreenWnd extends Wnd {
             },
           },
           {
-            label: 'compute and play automated controls',
+            label: 'play test inputs and automate',
             click: () => {
-              this.app.startComputingControls()
+              this.app.playTestInputsAndAutomate()
             },
           },
-
+          {
+            label: 'play test inputs',
+            click: () => {
+              this.app.playTestInputs()
+            },
+          },
+          {
+            label: 'create random futures',
+            click: () => {
+              this.app.createRandomFutures()
+            },
+          },
         ],
       },
     ])

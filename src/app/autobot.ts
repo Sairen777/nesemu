@@ -10,45 +10,64 @@ export class Autobot {
   protected pressedInputs: number[] = []
   protected motifs: number[][] = []
   protected motifsWeight: object[] = []
-  protected sortedMotifs: number[][] = []
-  protected buttonsToPress: number[] = []
   protected motifsPlayHistory: object[] = []
-  public testInputs: number[] = Array(120).fill(128)
+  protected testInputs = []
+  protected sessionTestInputs: number[] = [];
+  public plainTestInputs: number[] = []
+  protected randomFutures: number[][]
 
   constructor() {
   }
 
+  public getSessiontestInputs(): number[] {
+    return this.sessionTestInputs;
+  }
+
+  public pushSessionInput(pad: number): void {
+    this.sessionTestInputs.push(pad);
+  }
+
+  public setPlaintestInputs(inputs: number[]): void {
+    this.plainTestInputs = inputs;
+  }
+
+  public getPlainTestInputs(): number[] {
+    return this.plainTestInputs;
+  }
+
+  public getRandomFutures(): number[][] {
+    return this.randomFutures;
+  }
+
+  public setRandomFutures(randomFutures: number[][]): void {
+    this.randomFutures = randomFutures;
+  }
+
+  public createRandomFutures(): void {
+    for (let i = 0; i < 40; i++) {
+      const future: number[] = [];
+      for (let len = 0; len < (Math.random() * 10) + 5; len++) {
+        future.push(...this.motifsWeight[Math.floor(Math.random() * this.motifsWeight.length)].motif);
+      }
+      this.randomFutures.push(future);
+    }
+  }
+
+  public getTestInputs(): object[] {
+    return this.testInputs;
+  }
+
+  public popPlaintestInput(): number {
+    // @ts-ignore
+    return this.plainTestInputs.pop();
+  }
+
+  public pushPlainTestInput(pad: number): void {
+    this.plainTestInputs.push(pad);
+  }
+
   public pushMotifsPlayHistory(motifAndElapsedTime: object): void {
     this.motifsPlayHistory.push(motifAndElapsedTime);
-  }
-
-  public reverseControlsArray(): void {
-    this.buttonsToPress = this.buttonsToPress.reverse();
-  }
-
-  public hasButtonPresses(): boolean {
-    return this.buttonsToPress.length !== 0;
-  }
-
-  public getNextButtonPress(): number {
-    // @ts-ignore
-    return this.buttonsToPress.pop();
-  }
-
-  public addMotifToButtonPress(motif: number[]): void {
-    this.buttonsToPress.push(...motif);
-  }
-
-  public addButtonToPress(pad: number): void {
-    this.buttonsToPress.push(pad);
-  }
-
-  public setSortedMotifs(sortedMotifs: number[][]): void {
-    this.sortedMotifs = sortedMotifs;
-  }
-
-  public getSortedMotifs(): number[][] {
-    return this.sortedMotifs;
   }
 
   public setMotifsWeight(motifsWeight: object[]): void {

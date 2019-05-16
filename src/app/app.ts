@@ -35,9 +35,9 @@ export class App {
   protected autobot = new Autobot()
   protected isAutomating = false
   protected isLookingIntoFuture = false
-  protected isComputingControls = false
   protected initialSave = {}
   protected isPlayingSavedControls = false
+  protected waitingForTestInputsEnd = false
 
   protected title: string
   protected screenWnd: ScreenWnd
@@ -65,6 +65,10 @@ export class App {
     window.nes = this.nes  // Put nes into global.
     this.nes.setVblankCallback((leftV) => { this.onVblank(leftV) })
     this.nes.setBreakPointCallback(() => { this.onBreakPoint() })
+
+    document.getElementById("automation").addEventListener('click', () => {
+      this.playTestInputs()
+    });
 
     this.subscription = this.stream
       .subscribe(type => {
@@ -101,6 +105,8 @@ export class App {
     this.autobot.setOrderings(StorageUtil.getObject(`ORDERINGS-${this.title}`, []))
     this.autobot.setOrderingsWeight(StorageUtil.getObject(`ORDERINGS-WEIGHT-${this.title}`, []))
     this.autobot.setMotifsWeight(StorageUtil.getObject(`MOTIFS-WEIGHT-${this.title}`, {}))
+    this.autobot.setRandomFutures(StorageUtil.getObject(`RANDOM-FUTURES-${this.title}`, []))
+    this.autobot.setPlaintestInputs(StorageUtil.getObject(`PAD-PRESS-HISTORY-${this.title}`, []).reverse())
 
     this.screenWnd.setTitle(this.title)
 
@@ -324,6 +330,21 @@ export class App {
     this.stream.triggerBreakPoint()
   }
 
+  public createRandomFutures(): void {
+    this.autobot.createRandomFutures();
+    StorageUtil.putObject(`RANDOM-FUTURES-${this.title}`, this.autobot.getRandomFutures());
+  }
+
+  public playTestInputs(): void {
+    this.isPlayingSavedControls = true;
+  }
+
+  public playTestInputsAndAutomate(): void {
+    this.isPlayingSavedControls = true;
+    this.waitingForTestInputsEnd = true;
+  }
+
+
   public startRecordingRAM(): void {
     console.log('started recording ram');
     this.isRecordingRAM = true;
@@ -337,24 +358,14 @@ export class App {
     StorageUtil.putObject(`MOTIFS-WEIGHT-${this.title}`, this.autobot.getMotifsWeight());
   }
 
-  public startComputingControls(): void {
-    this.initialSave = this.nes.save();
-    this.isComputingControls = true;
-  }
-
-  public stopComputingControls(): void {
-    this.isComputingControls = false;
-    this.nes.load(this.initialSave);
-    this.autobot.reverseControlsArray();
-    this.isPlayingSavedControls = true;
-  }
-
   public startAutomation(): void {
     this.isAutomating = true
   }
 
   public stopAutomation(): void {
     this.isAutomating = false
+    const oldInputs = StorageUtil.getObject(`PAD-PRESS-HISTORY-${this.title}`, []);
+    StorageUtil.putObject(`PAD-PRESS-HISTORY-${this.title}`, [...oldInputs, ...this.autobot.getSessiontestInputs()]);
   }
 
   public generateAndSaveOrderings(): void {
@@ -393,63 +404,61 @@ export class App {
         console.log('saved snapshot')
       }
 
-      const shouldAutomate = (this.isAutomating || this.isComputingControls) && Autobot.shouldAutomate(frameCounter);
-
+      const shouldAutomate = this.isAutomating && Autobot.shouldAutomate(frameCounter);
       if (shouldAutomate) {
         console.log('automating');
-        const saveData = this.nes.save();
-        const ramData = {initial: [...this.nes.getRam()]};
-
+        const initialSave = this.nes.save();
+        const initialRamState = [...this.nes.getRam()];
         let bestMotif: number[] = [];
         let bestMotifScore = -1;
-
         this.isLookingIntoFuture = true;
         for (const motifObj of this.autobot.getMotifsWeight()) {
           for (const pad of motifObj.motif) {
             this.update(elapsedTime, pad)
           }
 
-          // play 10 most common motifs and pick one with lowest score
           const afterInitialMotifSave = this.nes.save();
-          let lowestWeight = 100000;
-
+          const ramAfterMotif = [...this.nes.getRam()];
+          let highestWeight = -1;
           for (let i = 0; i < 10; i++) {
-            for (const pad of this.autobot.getMotifsWeight()[i].motif) {
-              this.update(elapsedTime, pad)
+            for (const p of this.autobot.getMotifsWeight()[i].motif) {
+              this.update(elapsedTime, p)
             }
-            const weight = this.autobot.computeNewRamStateWeight(ramData['initial'], [...this.nes.getRam()]);
-            if (weight < lowestWeight) {
-              // lowestWeight = weight;
-              lowestWeight = weight
+            const w = this.autobot.computeNewRamStateWeight(ramAfterMotif, this.nes.getRam());
+            if (w > highestWeight) {
+              highestWeight = w;
             }
-
             this.nes.load(afterInitialMotifSave);
           }
 
-          if (lowestWeight > bestMotifScore) {
-            bestMotifScore = lowestWeight;
+          const weight = this.autobot.computeNewRamStateWeight(initialRamState, this.nes.getRam());
+          const sum = weight + highestWeight;
+          if (sum > bestMotifScore) {
+            bestMotifScore = sum;
             bestMotif = [...motifObj.motif];
           }
-
-          this.nes.load(saveData);
+          this.nes.load(initialSave);
         }
 
         this.autobot.pushMotifsPlayHistory({motif: bestMotif, elapsedTime: elapsedTime});
+        bestMotif.forEach(e => this.autobot.pushSessionInput(e));
         console.log('best motif', bestMotif);
-        if (this.isComputingControls) {
-          this.autobot.addMotifToButtonPress(bestMotif)
-        }
         this.isLookingIntoFuture = false;
         for (const pad of bestMotif) {
           this.update(elapsedTime, pad)
           frameCounter++;
         }
       } else if (this.isPlayingSavedControls) {
-        if (this.autobot.hasButtonPresses()) {
-          this.update(elapsedTime, this.autobot.getNextButtonPress());
+        const p = this.autobot.popPlaintestInput();
+        if (p) {
+          this.update(elapsedTime, p);
         } else {
-          console.log('stopped playing controls')
           this.isPlayingSavedControls = false;
+          console.log('ovah');
+          if (this.waitingForTestInputsEnd) {
+            this.waitingForTestInputsEnd = false;
+            this.isAutomating = true;
+          }
         }
       } else {
         this.update(elapsedTime);
@@ -457,9 +466,6 @@ export class App {
 
       this.stream.triggerEndCalc()
       this.rafId = requestAnimationFrame(loopFn)
-      if (this.isComputingControls && frameCounter >= Autobot.NUMBER_OF_FRAMES_TO_AUTOMATE_FOR) {
-        this.stopComputingControls();
-      }
     }
 
     this.rafId = requestAnimationFrame(loopFn)
